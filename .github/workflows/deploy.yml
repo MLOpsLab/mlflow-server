@@ -20,15 +20,27 @@ jobs:
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Clone the repository (or pull if already cloned)
-            cd mlflow-server || git clone https://github.com/MLOpsLab/mlflow-server.git mlflow-server && cd mlflow-server
+            # Create the base folder if it doesn't exist
+            mkdir -p mlflow-server
+            
+            # Only clone if the folder is empty
+            if [ -z "$(ls -A mlflow-server)" ]; then
+            git clone https://github.com/MLOpsLab/mlflow-server.git mlflow-server
+            fi
+            
+            # Move into the project folder and update it
+            cd mlflow-server
             git pull origin main
+            
             # Build the Docker image
             docker build -t mlflow-server .
+            
             # Create a custom network (if it doesn't exist)
             docker network create --driver bridge mlops-lab-net || true
+            
             # Stop and remove the existing container if running
             docker stop mlflow || true
             docker rm mlflow || true
+            
             # Run the new container with port mapping
             docker run -d -p 5000:5000 --name mlflow --network mlops-lab-net mlflow-server
