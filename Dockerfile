@@ -1,17 +1,10 @@
-FROM python:3.9-slim
+FROM python:3.10-slim
 
-# Install MLflow
-RUN pip install --no-cache-dir mlflow gunicorn
+# Install dependencies
+RUN pip install mlflow boto3
 
-# Create working directory
-WORKDIR /mlflow
-
-# Expose port
+# Expose the port in the Docker image (not in the container command)
 EXPOSE 5000
 
-# CMD must be a proper JSON array, lowercase args!
-CMD ["mlflow", "server", \
-     "--backend-store-uri", "sqlite:///mlflow.db", \
-     "--default-artifact-root", "/mlflow/mlruns", \
-     "--host", "0.0.0.0", \
-     "--port", "5000"]
+# Command to run the MLflow server
+CMD ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000"]
