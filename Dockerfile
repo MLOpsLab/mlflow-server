@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:3.10-alpine
 
 # Install MLflow and boto3 for S3
 RUN pip install --no-cache-dir \
