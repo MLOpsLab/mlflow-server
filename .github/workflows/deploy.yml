@@ -15,52 +15,48 @@ jobs:
 
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.0
-        env:
-          # S3 Bucket for Artifacts
-          MLFLOW_ARTIFACTS_BUCKET: ${{ secrets.MLFLOW_ARTIFACTS_BUCKET }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: MLFLOW_ARTIFACTS_BUCKET
+          command_timeout: 15m  # Limit total deployment time
           script: |
-            # Create the base folder if it doesn't exist
-            mkdir -p mlflow-server
-            
-            # Only clone if the folder is empty
-            if [ -z "$(ls -A mlflow-server)" ]; then
-              git clone https://github.com/MLOpsLab/mlflow-server.git mlflow-server
-            fi  
-            
-            # Move into the project folder and update it
-            cd mlflow-server
-            git pull origin main
-            
-            
-            # Limit Docker resources
-            sudo systemctl start docker
-            docker system prune -f
+            # Limit system resources for deployment
+            export DEPLOYMENT_CPUS=$(nproc --ignore=1)  # Use all but one CPU
+            export DEPLOYMENT_MEMORY=$(($(free -g | awk '/^Mem:/{print $2}') / 2))G
 
-            # Build Docker image with resource constraints
-            docker build \
+            # Create project directory with minimal overhead
+            mkdir -p ~/mlflow-server
+            cd ~/mlflow-server
+
+            # Shallow clone to reduce network and disk usage
+            git clone --depth 1 https://github.com/MLOpsLab/mlflow-server.git .
+            
+            # Ensure Docker is running with limited resources
+            sudo systemctl start docker
+
+            # Cleanup with minimal overhead
+            docker system prune -af --filter "until=24h"
+
+            # Build Docker image with resource limits
+            DOCKER_BUILDKIT=1 docker build \
+              --compress \
               --no-cache \
               -t mlflow-server \
-              --memory=512m \
-              --cpus=0.5 \
               .
-            
-            # Create a custom network (if it doesn't exist)
-            docker network create --driver bridge mlops-lab-net || true
-            
+
             # Stop and remove existing container
             docker stop mlflow || true
             docker rm mlflow || true
 
-            # Run with resource constraints
+            # Run Docker container with strict resource constraints
             docker run -d \
-              --restart=always \
-              --network host \  # Use host network mode
-              -p 0.0.0.0:5000:5000 \
+              --restart=unless-stopped \
+              --memory=450m \
+              --cpus=0.5 \
+              -p 5000:5000 \
               --name mlflow \
+              -e GUNICORN_WORKERS=2 \
+              -e GUNICORN_THREADS=1 \
               -e MLFLOW_ARTIFACTS_BUCKET=${{ secrets.MLFLOW_ARTIFACTS_BUCKET }} \
               mlflow-server
