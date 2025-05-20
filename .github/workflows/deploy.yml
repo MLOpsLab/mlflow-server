@@ -48,7 +48,10 @@ jobs:
               --memory=512m \
               --cpus=0.5 \
               .
-
+            
+            # Create a custom network (if it doesn't exist)
+            docker network create --driver bridge mlops-lab-net || true
+            
             # Stop and remove existing container
             docker stop mlflow || true
             docker rm mlflow || true
@@ -58,7 +61,8 @@ jobs:
               --restart=always \
               --memory=512m \
               --cpus=0.5 \
-              -p 5000:5000 \
+              --network host \  # Use host network mode
+              -p 0.0.0.0:5000:5000 \
               --name mlflow \
               -e MLFLOW_ARTIFACTS_BUCKET=${{ secrets.MLFLOW_ARTIFACTS_BUCKET }} \
               mlflow-server
