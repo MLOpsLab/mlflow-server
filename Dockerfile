@@ -1,10 +1,15 @@
 FROM python:3.10-slim
 
 # Install dependencies
-RUN pip install mlflow boto3
+RUN pip install mlflow boto3 psycopg2-binary
 
-# Expose the port in the Docker image (not in the container command)
+WORKDIR /app
+
+# Copy any startup scripts
+COPY start-mlflow.sh /app/start-mlflow.sh
+RUN chmod +x /app/start-mlflow.sh
+
 EXPOSE 5000
 
-# Command to run the MLflow server
-CMD ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000"]
+# Use the startup script as entrypoint
+ENTRYPOINT ["/app/start-mlflow.sh"]

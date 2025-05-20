@@ -15,10 +15,14 @@ jobs:
 
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.0
+        env:
+          # S3 Bucket for Artifacts
+          MLFLOW_ARTIFACTS_BUCKET: ${{ secrets.MLFLOW_ARTIFACTS_BUCKET }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
+          envs: MLFLOW_ARTIFACTS_BUCKET
           script: |
             # Create the base folder if it doesn't exist
             mkdir -p mlflow-server
@@ -43,4 +47,8 @@ jobs:
             docker rm mlflow || true
             
             # Run the new container with port mapping
-            docker run -d -p 5000:5000 --name mlflow --network mlops-lab-net mlflow-server
+            docker run -d \
+              -p 5000:5000 \
+              --name mlflow \
+              -e MLFLOW_ARTIFACTS_BUCKET=${MLFLOW_ARTIFACTS_BUCKET} \
+              mlflow-server
