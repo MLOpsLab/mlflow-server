@@ -36,19 +36,29 @@ jobs:
             cd mlflow-server
             git pull origin main
             
-            # Build the Docker image
-            docker build -t mlflow-server .
             
-            # Create a custom network (if it doesn't exist)
-            docker network create --driver bridge mlops-lab-net || true
-            
-            # Stop and remove the existing container if running
+            # Limit Docker resources
+            sudo systemctl start docker
+            docker system prune -f
+
+            # Build Docker image with resource constraints
+            docker build \
+              --no-cache \
+              -t mlflow-server \
+              --memory=512m \
+              --cpus=0.5 \
+              .
+
+            # Stop and remove existing container
             docker stop mlflow || true
             docker rm mlflow || true
-            
-            # Run the new container with port mapping
+
+            # Run with resource constraints
             docker run -d \
+              --restart=always \
+              --memory=512m \
+              --cpus=0.5 \
               -p 5000:5000 \
               --name mlflow \
-              -e MLFLOW_ARTIFACTS_BUCKET=${MLFLOW_ARTIFACTS_BUCKET} \
+              -e MLFLOW_ARTIFACTS_BUCKET=${{ secrets.MLFLOW_ARTIFACTS_BUCKET }} \
               mlflow-server
