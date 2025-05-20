@@ -3,7 +3,7 @@ FROM python:3.10-slim
 # Minimize layer size and dependencies
 RUN pip install --no-cache-dir \
     mlflow==2.3.1 \
-    boto3 \
+    boto3
 
 # Set conservative resource settings
 ENV GUNICORN_WORKERS=2
