@@ -57,9 +57,11 @@ jobs:
             # Run with resource constraints
             docker run -d \
               --restart=always \
-              --memory=512m \
-              --cpus=0.5 \
-              -p 5000:5000 \
+              -p 0.0.0.0:5000:5000 \
               --name mlflow \
+              --memory=512m \  # Conservative memory limit
+              --memory-swap=1g \
+              -e GUNICORN_WORKERS=2 \
+              -e GUNICORN_THREADS=1 \
               -e MLFLOW_ARTIFACTS_BUCKET=${{ secrets.MLFLOW_ARTIFACTS_BUCKET }} \
               mlflow-server
