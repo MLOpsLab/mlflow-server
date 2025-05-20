@@ -29,8 +29,8 @@ jobs:
             
             # Only clone if the folder is empty
             if [ -z "$(ls -A mlflow-server)" ]; then
-            git clone https://github.com/MLOpsLab/mlflow-server.git mlflow-server
-            fi
+              git clone https://github.com/MLOpsLab/mlflow-server.git mlflow-server
+            fi  
             
             # Move into the project folder and update it
             cd mlflow-server
