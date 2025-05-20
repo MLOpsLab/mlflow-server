@@ -16,16 +16,12 @@ jobs:
 
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.0
-        env:
-          # S3 Bucket for Artifacts
-          MLFLOW_ARTIFACTS_BUCKET: ${{ secrets.MLFLOW_ARTIFACTS_BUCKET }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: MLFLOW_ARTIFACTS_BUCKET
           script: |
-            # Create the base folder if it doesn't exist
+            # Create project directory
             mkdir -p mlflow-server
             
             # Only clone if the folder is empty
@@ -37,30 +33,24 @@ jobs:
             cd mlflow-server
             git pull origin main
             
-            
-            # Limit Docker resources
+            # Ensure Docker is running
             sudo systemctl start docker
+
+            # Clean previous builds
             docker system prune -f
 
-            # Build Docker image with resource constraints
-            docker build \
-              --no-cache \
-              -t mlflow-server \
-              --memory=512m \
-              --cpus=0.5 \
-              .
+            # Build Docker image
+            docker build -t mlflow-server .
 
             # Stop and remove existing container
             docker stop mlflow || true
             docker rm mlflow || true
 
-            # Run with resource constraints
+            # Run Docker container with environment variables
             docker run -d \
               --restart=always \
-              -p 0.0.0.0:5000:5000 \
+              -p 5000:5000 \
               --name mlflow \
-              --memory=512m \  # Conservative memory limit
-              --memory-swap=1g \
               -e GUNICORN_WORKERS=2 \
               -e GUNICORN_THREADS=1 \
               -e MLFLOW_ARTIFACTS_BUCKET=${{ secrets.MLFLOW_ARTIFACTS_BUCKET }} \
