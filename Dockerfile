@@ -1,15 +1,17 @@
 FROM python:3.10-slim
 
-# Install dependencies
-RUN pip install mlflow boto3 psycopg2-binary
+# Install MLflow and boto3 for S3
+RUN pip install --no-cache-dir \
+    mlflow \
+    boto3
 
-WORKDIR /app
-
-# Copy any startup scripts
-COPY start-mlflow.sh /app/start-mlflow.sh
-RUN chmod +x /app/start-mlflow.sh
-
+# Expose MLflow server port
 EXPOSE 5000
 
-# Use the startup script as entrypoint
-ENTRYPOINT ["/app/start-mlflow.sh"]
+# Entrypoint that uses environment variable for S3 bucket
+ENTRYPOINT ["sh", "-c", \
+    "mlflow server \
+    --backend-store-uri sqlite:////app/mlflow.db \
+    --default-artifact-root s3://${MLFLOW_ARTIFACTS_BUCKET}/mlruns \
+    --host 0.0.0.0 \
+    --port 5000"]
