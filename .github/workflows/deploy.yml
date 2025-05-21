@@ -1,62 +1,48 @@
-name: Deploy MLflow Server to EC2
+name: Deploy MLflow to EC2
 
 on:
   push:
-    branches:
-      - main
+    branches: [ develop ]
+  workflow_dispatch:  # Allows manual triggering
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
-      - name: Deploy to EC2 via SSH
-        uses: appleboy/ssh-action@v1.0.0
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
-          command_timeout: 15m  # Limit total deployment time
           script: |
-            # Limit system resources for deployment
-            export DEPLOYMENT_CPUS=$(nproc --ignore=1)  # Use all but one CPU
-            export DEPLOYMENT_MEMORY=$(($(free -g | awk '/^Mem:/{print $2}') / 2))G
 
-            # Create project directory with minimal overhead
-            mkdir -p ~/mlflow-server
-            cd ~/mlflow-server
-
-            # Shallow clone to reduce network and disk usage
-            git clone --depth 1 https://github.com/MLOpsLab/mlflow-server.git .
+            # Kill any existing MLflow process
+            pkill -f "mlflow server" || true
             
-            # Ensure Docker is running with limited resources
-            sudo systemctl start docker
+            # Create systemd service file for MLflow
+            echo "[Unit]
+            Description=MLflow Tracking Server
+            After=network.target
 
-            # Cleanup with minimal overhead
-            docker system prune -af --filter "until=24h"
+            [Service]
+            User=$USER
+            ExecStart=$HOME/.local/bin/mlflow server --host 0.0.0.0 --port 5000 --workers 1
+            Restart=on-failure
+            RestartSec=5
+            StandardOutput=journal
+            StandardError=journal
 
-            # Build Docker image with resource limits
-            DOCKER_BUILDKIT=1 docker build \
-              --compress \
-              --no-cache \
-              -t mlflow-server \
-              .
-
-            # Stop and remove existing container
-            docker stop mlflow || true
-            docker rm mlflow || true
-
-            # Run Docker container with strict resource constraints
-            docker run -d \
-              --restart=unless-stopped \
-              --memory=450m \
-              --cpus=0.5 \
-              -p 5000:5000 \
-              --name mlflow \
-              -e GUNICORN_WORKERS=2 \
-              -e GUNICORN_THREADS=1 \
-              -e MLFLOW_ARTIFACTS_BUCKET=${{ secrets.MLFLOW_ARTIFACTS_BUCKET }} \
-              mlflow-server
+            [Install]
+            WantedBy=multi-user.target" > /tmp/mlflow.service
+            
+            # Set up systemd service
+            sudo mv /tmp/mlflow.service /etc/systemd/system/mlflow.service
+            sudo systemctl daemon-reload
+            sudo systemctl enable mlflow.service
+            sudo systemctl restart mlflow.service
+            
+            # Quick check to verify service is running
+            sleep 5
+            systemctl status mlflow.service
