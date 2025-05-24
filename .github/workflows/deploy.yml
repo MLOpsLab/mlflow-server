@@ -2,46 +2,46 @@ name: Deploy MLflow to EC2
 
 on:
   push:
-    branches: [ develop ]
-  workflow_dispatch:  # Allows manual triggering
-
+    branches:
+      - develop
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@master
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up SSH key
+        uses: webfactory/ssh-agent@v0.9.0
         with:
-          host: ${{ secrets.EC2_HOST }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            # Kill any existing MLflow process
-            pkill -f "mlflow server" || true
-            
-            # Create systemd service file for MLflow
-            echo "[Unit]
-            Description=MLflow Tracking Server
-            After=network.target
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
 
-            [Service]
-            User=$USER
-            ExecStart=$HOME/.local/bin/mlflow server --host 0.0.0.0 --port 5000 --workers 1
-            Restart=on-failure
-            RestartSec=5
-            StandardOutput=journal
-            StandardError=journal
+      - name: Copy setup script to EC2
+        run: |
+          # Add EC2 host to known_hosts to avoid interactive prompt
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+          
+          # SCP the script. Adjust path to script if it's not in the root.
+          scp ./setup_mlflow.sh ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:~/setup_mlflow.sh
+        shell: bash
 
-            [Install]
-            WantedBy=multi-user.target" > /tmp/mlflow.service
-            
-            # Set up systemd service
-            sudo mv /tmp/mlflow.service /etc/systemd/system/mlflow.service
-            sudo systemctl daemon-reload
-            sudo systemctl enable mlflow.service
-            sudo systemctl restart mlflow.service
-            
-            # Quick check to verify service is running
-            sleep 5
-            systemctl status mlflow.service
+      - name: Execute setup script on EC2
+        run: |
+          ssh ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "
+            set -e;
+            chmod +x ~/setup_mlflow.sh;
+            echo 'Executing MLflow setup script on EC2...';
+            export MLFLOW_S3_BUCKET_NAME_ENV='${{ secrets.MLFLOW_ARTIFACTS_BUCKET }}';
+            echo \"S3 Bucket from GitHub Secret (passed as MLFLOW_S3_BUCKET_NAME_ENV): \$MLFLOW_S3_BUCKET_NAME_ENV\";
+            cd ~ && ./setup_mlflow.sh;
+            echo 'MLflow setup script execution finished.'
+          "
+        shell: bash
+
+      - name: Clean up SSH key
+        # This step is important for security if the runner is reused.
+        # webfactory/ssh-agent should handle cleanup, but explicit is fine.
+        if: always()
+        run: |
+          echo "Cleaning up SSH agent"
+          ssh-add -D || true # Remove identities from agent
