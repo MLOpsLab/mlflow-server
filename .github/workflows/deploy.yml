@@ -45,4 +45,3 @@ jobs:
         run: |
           echo "Cleaning up SSH agent"
           ssh-add -D || true # Remove identities from agent
-      
