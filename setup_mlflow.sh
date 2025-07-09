@@ -245,7 +245,6 @@ echo "For a more robust setup (recommended for anything beyond basic testing), c
 # ... (systemd example) ...
 echo "====================================================================="
 echo "DEBUG: Script finished."
-
 # Remove set -x if you want to turn off extreme debugging for the final output.
 # set +x
 exit 0
