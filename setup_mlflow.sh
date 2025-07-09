@@ -182,6 +182,46 @@ echo "STEP 5: Setup Complete!"
 PUBLIC_IP_CMD="curl -s http://169.254.169.254/latest/meta-data/public-ipv4 || echo \"YOUR_EC2_PUBLIC_IP (Could not fetch automatically)\""
 PUBLIC_IP=$(eval "$PUBLIC_IP_CMD")
 
+# --- 6. Setup systemd Service for MLflow ---
+echo "=================================================="
+echo "STEP 6: Setting up systemd service for MLflow..."
+echo "=================================================="
+
+SYSTEMD_SERVICE_FILE="/etc/systemd/system/mlflow.service"
+
+sudo tee "$SYSTEMD_SERVICE_FILE" > /dev/null <<EOF
+[Unit]
+Description=MLflow Tracking Server
+After=network.target
+
+[Service]
+User=$MLFLOW_USER
+WorkingDirectory=$MLFLOW_DATA_DIR
+ExecStart=$MLFLOW_EXECUTABLE_PATH server \
+  --backend-store-uri sqlite:///$MLFLOW_DB_ABSOLUTE_PATH \
+  --default-artifact-root $MLFLOW_S3_ARTIFACT_ROOT \
+  --host $MLFLOW_HOST \
+  --port $MLFLOW_SERVER_PORT
+Environment="PATH=$HOME/.local/bin:/usr/bin:/bin"
+Restart=always
+StandardOutput=append:$MLFLOW_LOG_FILE
+StandardError=append:$MLFLOW_LOG_FILE
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+echo "Reloading systemd and enabling mlflow.service..."
+sudo systemctl daemon-reexec
+sudo systemctl daemon-reload
+sudo systemctl enable mlflow.service
+sudo systemctl restart mlflow.service
+
+echo ""
+echo "✅ MLflow service created and started via systemd!"
+sudo systemctl status mlflow.service --no-pager || true
+
+
 echo ""
 echo "====================================================================="
 echo "MLflow Server is now running!"
